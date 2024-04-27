@@ -11,6 +11,7 @@
 *.rs   text
 Cargo.toml text eol=lf
 Cargo.lock text eol=lf
+*.wgsl text
 
 # Declare files that will always have CRLF line endings on checkout.
 *.sln text eol=crlf

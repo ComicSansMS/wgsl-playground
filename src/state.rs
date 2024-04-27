@@ -1,4 +1,4 @@
-use wgpu::Surface;
+use wgpu::{IndexFormat, Surface};
 use winit::{dpi::PhysicalSize, event};
 
 pub struct State<'a> {
@@ -8,6 +8,7 @@ pub struct State<'a> {
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
     window: &'a winit::window::Window,
+    render_pipeline: wgpu::RenderPipeline,
 }
 
 impl<'a> State<'a> {
@@ -53,7 +54,52 @@ impl<'a> State<'a> {
         };
         surface.configure(&device, &config);
 
-        Self{ surface, device, queue, config, size, window }
+        // set up render pipeline
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor{
+            label: Some("My Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+        });
+        let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor{
+            label: Some("My Render Pipeline Layout"),
+            bind_group_layouts: &[],
+            push_constant_ranges: &[],
+        });
+        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("My Render Pipeline"),
+            layout: Some(&render_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_main",
+                buffers: &[],
+            },
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                unclipped_depth: false,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            fragment: Some(wgpu::FragmentState{
+                module: &shader,
+                entry_point: "fs_main",
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            multiview: None
+        });
+
+        Self{ surface, device, queue, config, size, window, render_pipeline }
     }
 
     pub fn window(&self) -> &winit::window::Window {
@@ -87,7 +133,7 @@ impl<'a> State<'a> {
             label: Some("Render Encoder"),
         });
         {
-            let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Clear Screen Render Pass"),
                  color_attachments: &[
                     Some(wgpu::RenderPassColorAttachment {
@@ -103,6 +149,9 @@ impl<'a> State<'a> {
                  timestamp_writes: None,
                  occlusion_query_set: None,
             });
+
+            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.draw(0..3, 0..1);
         }
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
