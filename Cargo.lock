@@ -1774,6 +1774,7 @@ dependencies = [
 name = "wgpu-playground"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
  "cfg-if",
  "env_logger",
  "log",

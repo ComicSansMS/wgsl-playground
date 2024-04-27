@@ -1,5 +1,41 @@
-use wgpu::{IndexFormat, Surface};
+use wgpu::{util::DeviceExt, IndexFormat, Surface, VertexBufferLayout};
 use winit::{dpi::PhysicalSize, event};
+
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+struct Vertex {
+    position: [f32; 3],
+    color: [f32; 3],
+}
+unsafe impl bytemuck::Zeroable for Vertex {}
+unsafe impl bytemuck::Pod for Vertex {}
+impl Vertex {
+    fn buffer_layout() -> wgpu::VertexBufferLayout<'static> {
+        VertexBufferLayout {
+            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &[
+                wgpu::VertexAttribute{
+                    offset: 0,
+                    shader_location: 0,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute{
+                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    shader_location: 1,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+            ],
+        }
+    }
+}
+
+const VERTICES: &[Vertex] = &[
+    Vertex { position: [ 0.0,  0.5,  0.0], color: [1.0, 0.0, 0.0] },
+    Vertex { position: [-0.5, -0.5,  0.0], color: [0.0, 1.0, 0.0] },
+    Vertex { position: [ 0.5, -0.5,  0.0], color: [0.0, 0.0, 1.0] },
+];
 
 pub struct State<'a> {
     surface: wgpu::Surface<'a>,
@@ -9,6 +45,7 @@ pub struct State<'a> {
     size: winit::dpi::PhysicalSize<u32>,
     window: &'a winit::window::Window,
     render_pipeline: wgpu::RenderPipeline,
+    vertex_buffer: wgpu::Buffer,
 }
 
 impl<'a> State<'a> {
@@ -70,7 +107,9 @@ impl<'a> State<'a> {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
-                buffers: &[],
+                buffers: &[
+                    Vertex::buffer_layout(),
+                ],
             },
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -99,7 +138,14 @@ impl<'a> State<'a> {
             multiview: None
         });
 
-        Self{ surface, device, queue, config, size, window, render_pipeline }
+        // set up vertex buffer
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("My Vertex Buffer"),
+            contents: bytemuck::cast_slice(VERTICES),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        Self{ surface, device, queue, config, size, window, render_pipeline, vertex_buffer }
     }
 
     pub fn window(&self) -> &winit::window::Window {
@@ -151,7 +197,8 @@ impl<'a> State<'a> {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.draw(0..3, 0..1);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.draw(0..(VERTICES.len() as u32), 0..1);
         }
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
