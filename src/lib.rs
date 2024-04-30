@@ -2,6 +2,7 @@ use window::start_event_loop;
 
 mod window;
 mod state;
+mod texture;
 
 pub async fn run() {
     env_logger::init();
